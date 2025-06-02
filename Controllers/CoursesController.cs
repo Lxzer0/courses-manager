@@ -34,6 +34,7 @@ namespace CoursesManager.Controllers
 
                 result.Add(new CourseReadDto
                 {
+                    Id = course.Id,
                     Title = course.Title,
                     Description = course.Description,
                     Category = category.Name,
@@ -58,6 +59,7 @@ namespace CoursesManager.Controllers
 
             var result = new CourseReadDto
             {
+                Id = course.Id,
                 Title = course.Title,
                 Description = course.Description,
                 Category = category.Name,
