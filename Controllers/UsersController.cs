@@ -34,7 +34,7 @@ namespace CoursesManager.Controllers
                     Expires = DateTime.UtcNow.AddHours(1)
                 });
 
-                return Ok(new { token = jwt });
+                return Ok();
             }
 
             return Unauthorized(new { error = "Invalid email or password" });
@@ -81,7 +81,7 @@ namespace CoursesManager.Controllers
                 Expires = DateTime.UtcNow.AddHours(1)
             });
 
-            return Ok(new { token = jwt });
+            return Ok();
         }
     }
 }

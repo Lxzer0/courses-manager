@@ -13,7 +13,7 @@ namespace CoursesManager.Dtos
         [JsonPropertyName("pass")]
         public required string Password { get; set; }
         [Required]
-        [JsonPropertyName("username")]
+        [JsonPropertyName("name")]
         public required string Username { get; set; }
     }
 }

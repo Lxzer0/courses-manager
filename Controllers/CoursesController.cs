@@ -122,7 +122,7 @@ namespace CoursesManager.Controllers
             if (userIdClaim == null) return Unauthorized();
 
             var course = await _context.Courses.FindAsync(id);
-            if (course == null) return NotFound();
+            if (course == null) return NotFound(new { error = "Course not found" });
 
             var userId = Guid.Parse(userIdClaim.Value);
             if (course.UserId != userId) return Forbid();
