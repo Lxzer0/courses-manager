@@ -108,10 +108,7 @@ using (var scope = app.Services.CreateScope())
         {
             Id = Guid.Parse("00735d47-22a0-41c9-a27c-1da7aa764034"),
             Title = "Blender Fundamentals",
-            Description = @"Unlock your creative potential and dive into the world of 3D with Blender —
-                        the industry-leading, open-source software used for modeling, animation, rendering, and more.
-                        Whether you're an absolute beginner or transitioning from another design background,
-                        this course will guide you through every essential concept and tool you need to start creating stunning 3D projects from scratch.",
+            Description = "Unlock your creative potential and dive into the world of 3D with Blender — the industry-leading, open-source software used for modeling, animation, rendering, and more. Whether you're an absolute beginner or transitioning from another design background, this course will guide you through every essential concept and tool you need to start creating stunning 3D projects from scratch.",
             Image = File.ReadAllBytes("Assets/fox.jpg"),
             Mime = "image/jpeg",
             CategoryId = categoryGraphicDesign.Id,
