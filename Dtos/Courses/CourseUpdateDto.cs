@@ -9,9 +9,7 @@ namespace CoursesManager.Dtos
         public string? Title { get; set; }
         [JsonPropertyName("description")]
         public string? Description { get; set; }
-        [JsonPropertyName("categoryId")]
+        [JsonPropertyName("category_id")]
         public Guid? CategoryId { get; set; }
-        [JsonPropertyName("userId")]
-        public Guid? UserId { get; set; }
     }
 }

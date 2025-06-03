@@ -18,14 +18,15 @@ namespace CoursesManager.Services
             _jwtSettings = jwtOptions.Value;
         }
 
-        public string GenerateJwtToken(Guid uuid)
+        public string GenerateJwtToken(Guid uuid, string username)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
             {
-                new Claim("uuid", uuid.ToString())
+                new Claim("uuid", uuid.ToString()),
+                new Claim("username", username)
             };
 
             var token = new JwtSecurityToken(

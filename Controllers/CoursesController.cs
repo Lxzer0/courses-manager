@@ -1,5 +1,6 @@
 using CoursesManager.Models;
 using CoursesManager.Dtos;
+using CoursesManager.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -27,18 +28,21 @@ namespace CoursesManager.Controllers
 
             foreach (var course in courses)
             {
-                var category = await _context.Categories.FindAsync(course.CategoryId);
                 var user = await _context.Users.FindAsync(course.UserId);
+                if (user == null) return StatusCode(StatusCodes.Status500InternalServerError);
 
-                if (category == null || user == null) continue;
+                var userIdClaim = User.FindFirst("uuid");
+                bool isOwner = false;
+                if (userIdClaim != null) isOwner = course.UserId == Guid.Parse(userIdClaim.Value);
 
                 result.Add(new CourseReadDto
                 {
                     Id = course.Id,
                     Title = course.Title,
                     Description = course.Description,
-                    Category = category.Name,
-                    Username = user.Username
+                    CategoryId = course.CategoryId,
+                    Username = user.Username,
+                    Owner = isOwner
                 });
             }
 
@@ -49,29 +53,47 @@ namespace CoursesManager.Controllers
         public async Task<ActionResult<CourseReadDto>> GetCourse(Guid id)
         {
             var course = await _context.Courses.FindAsync(id);
-
             if (course == null) return NotFound(new { error = "Course not found" });
 
-            var category = await _context.Categories.FindAsync(course.CategoryId);
             var user = await _context.Users.FindAsync(course.UserId);
+            if (user == null) return StatusCode(StatusCodes.Status500InternalServerError);
 
-            if (category == null || user == null) return NotFound(new { error = "Related data not found" });
+            var userIdClaim = User.FindFirst("uuid");
+            bool isOwner = false;
+            if (userIdClaim != null) isOwner = course.UserId == Guid.Parse(userIdClaim.Value);
 
             var result = new CourseReadDto
             {
                 Id = course.Id,
                 Title = course.Title,
                 Description = course.Description,
-                Category = category.Name,
-                Username = user.Username
+                CategoryId = course.CategoryId,
+                Username = user.Username,
+                Owner = isOwner
             };
 
             return Ok(result);
         }
 
+        [HttpGet("image/{id}")]
+        public async Task<ActionResult> GetCourseImage(Guid id)
+        {
+            var course = await _context.Courses.FindAsync(id);
+            if (course == null) return NotFound(new { error = "Course not found" });
+
+            var image = course.Image;
+            if (image == null || image.Length == 0) return NotFound(new { error = "Image not found" });
+
+            var mimeType = course.Mime;
+
+            Response.Headers["Cache-Control"] = "public, max-age=604800, immutable";
+
+            return File(image, mimeType);
+        }
+
         [Authorize]
-        [HttpPost]
-        public async Task<ActionResult> PostCourse([FromBody] CourseCreateDto course)
+        [HttpPut]
+        public async Task<ActionResult> PutCourse([FromForm] CourseCreateDto course)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
@@ -80,23 +102,49 @@ namespace CoursesManager.Controllers
 
             var userId = Guid.Parse(userIdClaim.Value);
 
+            byte[] imageBytes;
+            using (var ms = new MemoryStream())
+            {
+                await course.Image.CopyToAsync(ms);
+                imageBytes = ms.ToArray();
+            }
+
+            var mimeType = MimeHelper.GetMimeType(imageBytes);
+            if (mimeType == "application/octet-stream") BadRequest(new { error = "Unrecognized image format" });
+
             var newCourse = new Course
             {
                 Id = Guid.NewGuid(),
                 Title = course.Title,
                 Description = course.Description,
+                Image = imageBytes,
+                Mime = mimeType,
                 CategoryId = course.CategoryId,
                 UserId = userId,
             };
+
             _context.Courses.Add(newCourse);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetCourse), new { id = newCourse.Id }, newCourse);
+            var username = User.FindFirst("username")?.Value;
+            if (username == null) return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Username not found in claims" });
+
+            var courseDto = new CourseReadDto
+            {
+                Id = newCourse.Id,
+                Title = newCourse.Title,
+                Description = newCourse.Description,
+                CategoryId = newCourse.CategoryId,
+                Username = username,
+                Owner = true
+            };
+
+            return CreatedAtAction(nameof(GetCourse), new { id = courseDto.Id }, courseDto);
         }
 
         [Authorize]
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutCourse(Guid id, [FromBody] CourseUpdateDto course)
+        [HttpPatch("{id}")]
+        public async Task<IActionResult> PatchCourse(Guid id, [FromBody] CourseUpdateDto course)
         {
             var userIdClaim = User.FindFirst("uuid");
             if (userIdClaim == null) return Unauthorized();

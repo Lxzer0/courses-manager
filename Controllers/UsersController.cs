@@ -25,7 +25,7 @@ namespace CoursesManager.Controllers
 
             if (user != null && user.Password == login.Password)
             {
-                var jwt = _jwtService.GenerateJwtToken(user.Id);
+                var jwt = _jwtService.GenerateJwtToken(user.Id, user.Username);
 
                 Response.Cookies.Append("jwt", jwt, new CookieOptions
                 {
@@ -72,7 +72,7 @@ namespace CoursesManager.Controllers
             _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
 
-            var jwt = _jwtService.GenerateJwtToken(newUser.Id);
+            var jwt = _jwtService.GenerateJwtToken(newUser.Id, newUser.Username);
 
             Response.Cookies.Append("jwt", jwt, new CookieOptions
             {

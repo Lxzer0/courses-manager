@@ -6,13 +6,12 @@ namespace CoursesManager.Dtos
     public class CourseCreateDto
     {
         [Required]
-        [JsonPropertyName("title")]
         public required string Title { get; set; }
         [Required]
-        [JsonPropertyName("description")]
         public required string Description { get; set; }
         [Required]
-        [JsonPropertyName("categoryId")]
-        public Guid CategoryId { get; set; }
+        public required IFormFile Image { get; set; }
+        [Required]
+        public required Guid CategoryId { get; set; }
     }
 }
