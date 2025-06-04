@@ -1,9 +1,8 @@
-using CoursesManager.Models;
 using CoursesManager.Dtos;
 using CoursesManager.Helpers;
+using CoursesManager.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace CoursesManager.Controllers
@@ -12,39 +11,19 @@ namespace CoursesManager.Controllers
     [Route("api/[controller]")]
     public class CoursesController : ControllerBase
     {
-        private readonly CoursesManagerContext _context;
+        private readonly ICourseService _courseService;
 
-        public CoursesController(CoursesManagerContext context)
+        public CoursesController(ICourseService courseService)
         {
-            _context = context;
+            _courseService = courseService;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CourseReadDto>>> GetCourses()
         {
-            var courses = await _context.Courses.ToListAsync();
-
-            var result = new List<CourseReadDto>();
-
-            foreach (var course in courses)
-            {
-                var user = await _context.Users.FindAsync(course.UserId);
-                if (user == null) return StatusCode(StatusCodes.Status500InternalServerError);
-
-                var userIdClaim = User.FindFirst("uuid");
-                bool isOwner = false;
-                if (userIdClaim != null) isOwner = course.UserId == Guid.Parse(userIdClaim.Value);
-
-                result.Add(new CourseReadDto
-                {
-                    Id = course.Id,
-                    Title = course.Title,
-                    Description = course.Description,
-                    CategoryId = course.CategoryId,
-                    Username = user.Username,
-                    Owner = isOwner
-                });
-            }
+            var userIdClaim = User.FindFirst("uuid");
+            Guid? currentUserId = userIdClaim != null ? Guid.Parse(userIdClaim.Value) : null;
+            var result = await _courseService.GetAllAsync(currentUserId);
 
             return Ok(result);
         }
@@ -52,25 +31,10 @@ namespace CoursesManager.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<CourseReadDto>> GetCourse(Guid id)
         {
-            var course = await _context.Courses.FindAsync(id);
-            if (course == null) return NotFound(new { error = "Course not found" });
-
-            var user = await _context.Users.FindAsync(course.UserId);
-            if (user == null) return StatusCode(StatusCodes.Status500InternalServerError);
-
             var userIdClaim = User.FindFirst("uuid");
-            bool isOwner = false;
-            if (userIdClaim != null) isOwner = course.UserId == Guid.Parse(userIdClaim.Value);
-
-            var result = new CourseReadDto
-            {
-                Id = course.Id,
-                Title = course.Title,
-                Description = course.Description,
-                CategoryId = course.CategoryId,
-                Username = user.Username,
-                Owner = isOwner
-            };
+            Guid? currentUserId = userIdClaim != null ? Guid.Parse(userIdClaim.Value) : null;
+            var result = await _courseService.GetByIdAsync(id, currentUserId);
+            if (result == null) return NotFound(new { error = "Course not found" });
 
             return Ok(result);
         }
@@ -78,13 +42,11 @@ namespace CoursesManager.Controllers
         [HttpGet("image/{id}")]
         public async Task<ActionResult> GetCourseImage(Guid id)
         {
-            var course = await _context.Courses.FindAsync(id);
-            if (course == null) return NotFound(new { error = "Course not found" });
+            var imageData = await _courseService.GetImageAsync(id);
+            if (imageData == null) return NotFound(new { error = "Course not found" });
 
-            var image = course.Image;
+            var (image, mimeType) = imageData.Value;
             if (image == null || image.Length == 0) return NotFound(new { error = "Image not found" });
-
-            var mimeType = course.Mime;
 
             Response.Headers["Cache-Control"] = "public, max-age=604800, immutable";
 
@@ -101,43 +63,11 @@ namespace CoursesManager.Controllers
             if (userIdClaim == null) return Unauthorized();
 
             var userId = Guid.Parse(userIdClaim.Value);
-
-            byte[] imageBytes;
-            using (var ms = new MemoryStream())
-            {
-                await course.Image.CopyToAsync(ms);
-                imageBytes = ms.ToArray();
-            }
-
-            var mimeType = MimeHelper.GetMimeType(imageBytes);
-            if (mimeType == "application/octet-stream") BadRequest(new { error = "Unrecognized image format" });
-
-            var newCourse = new Course
-            {
-                Id = Guid.NewGuid(),
-                Title = course.Title,
-                Description = course.Description,
-                Image = imageBytes,
-                Mime = mimeType,
-                CategoryId = course.CategoryId,
-                UserId = userId,
-            };
-
-            _context.Courses.Add(newCourse);
-            await _context.SaveChangesAsync();
-
             var username = User.FindFirst("username")?.Value;
-            if (username == null) return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Username not found in claims" });
+            if (username == null) return StatusCode(StatusCodes.Status500InternalServerError);
 
-            var courseDto = new CourseReadDto
-            {
-                Id = newCourse.Id,
-                Title = newCourse.Title,
-                Description = newCourse.Description,
-                CategoryId = newCourse.CategoryId,
-                Username = username,
-                Owner = true
-            };
+            CourseReadDto? courseDto = await _courseService.CreateAsync(course, userId, username);
+            if (courseDto == null) return BadRequest();
 
             return CreatedAtAction(nameof(GetCourse), new { id = courseDto.Id }, courseDto);
         }
@@ -149,17 +79,9 @@ namespace CoursesManager.Controllers
             var userIdClaim = User.FindFirst("uuid");
             if (userIdClaim == null) return Unauthorized();
 
-            var existingCourse = await _context.Courses.FindAsync(id);
-            if (existingCourse == null) return NotFound(new { error = "Course not found" });
-
             var userId = Guid.Parse(userIdClaim.Value);
-            if (existingCourse.UserId != userId) return Forbid();
-
-            if (course.Title != null) existingCourse.Title = course.Title;
-            if (course.Description != null) existingCourse.Description = course.Description;
-            if (course.CategoryId.HasValue) existingCourse.CategoryId = course.CategoryId.Value;
-
-            await _context.SaveChangesAsync();
+            var updated = await _courseService.UpdateAsync(id, course, userId);
+            if (!updated) return NotFound("Course not found or not owner");
 
             return Ok();
         }
@@ -171,14 +93,9 @@ namespace CoursesManager.Controllers
             var userIdClaim = User.FindFirst("uuid");
             if (userIdClaim == null) return Unauthorized();
 
-            var course = await _context.Courses.FindAsync(id);
-            if (course == null) return NotFound(new { error = "Course not found" });
-
             var userId = Guid.Parse(userIdClaim.Value);
-            if (course.UserId != userId) return Forbid();
-
-            _context.Courses.Remove(course);
-            await _context.SaveChangesAsync();
+            var deleted = await _courseService.DeleteAsync(id, userId);
+            if (!deleted) return NotFound("Course not found or not owner");
 
             return Ok();
         }

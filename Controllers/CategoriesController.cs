@@ -1,7 +1,6 @@
+using CoursesManager.Interfaces;
 using CoursesManager.Models;
-using CoursesManager.Dtos;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace CoursesManager.Controllers
 {
@@ -9,17 +8,17 @@ namespace CoursesManager.Controllers
     [Route("api")]
     public class CategoriesController : ControllerBase
     {
-        private readonly CoursesManagerContext _context;
+        private readonly ICategoryService _categoryService;
 
-        public CategoriesController(CoursesManagerContext context)
+        public CategoriesController(ICategoryService categoryService)
         {
-            _context = context;
+            _categoryService = categoryService;
         }
 
         [HttpGet("categories")]
         public async Task<ActionResult<IEnumerable<Category>>> GetCategories()
         {
-            var categories = await _context.Categories.ToListAsync();
+            var categories = await _categoryService.GetCategoriesAsync();
 
             return Ok(categories);
         }
