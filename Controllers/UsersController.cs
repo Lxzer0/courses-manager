@@ -1,4 +1,3 @@
-using CoursesManager.Models;
 using CoursesManager.Interfaces;
 using CoursesManager.Dtos;
 using Microsoft.AspNetCore.Mvc;
@@ -9,21 +8,21 @@ namespace CoursesManager.Controllers
     [Route("api")]
     public class UsersController : ControllerBase
     {
-        private readonly CoursesManagerContext _context;
+        private readonly IUserService _userService;
         private readonly IJwtService _jwtService;
 
-        public UsersController(CoursesManagerContext context, IJwtService jwtService)
+        public UsersController(IUserService userService, IJwtService jwtService)
         {
-            _context = context;
+            _userService = userService;
             _jwtService = jwtService;
         }
 
         [HttpPost("login")]
-        public IActionResult Login([FromBody] LoginDto login)
+        public async Task<IActionResult> Login([FromBody] LoginDto login)
         {
-            var user = _context.Users.FirstOrDefault(u => u.Email == login.Email);
+            var user = await _userService.AuthenticateAsync(login.Email, login.Password);
 
-            if (user != null && user.Password == login.Password)
+            if (user != null)
             {
                 var jwt = _jwtService.GenerateJwtToken(user.Id, user.Username);
 
@@ -57,20 +56,11 @@ namespace CoursesManager.Controllers
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            if (_context.Users.Any(u => u.Email == register.Email)) return BadRequest(new { error = "Email already exists" });
+            if (await _userService.EmailExistsAsync(register.Email)) return BadRequest(new { error = "Email already exists" });
 
-            if (HttpContext.Request.Cookies.ContainsKey("jwt")) return StatusCode(403, new { error = "Already logged in" });
+            if (HttpContext.Request.Cookies.ContainsKey("jwt")) return StatusCode(StatusCodes.Status403Forbidden, new { error = "Already logged in" });
 
-            var newUser = new User
-            {
-                Id = Guid.NewGuid(),
-                Email = register.Email,
-                Password = register.Password,
-                Username = register.Username
-            };
-
-            _context.Users.Add(newUser);
-            await _context.SaveChangesAsync();
+            var newUser = await _userService.RegisterAsync(register);
 
             var jwt = _jwtService.GenerateJwtToken(newUser.Id, newUser.Username);
 
